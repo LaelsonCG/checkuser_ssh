@@ -10,6 +10,7 @@ Como o nome sugere, essa é uma api de checkuser para obter informações de usu
 
 Em breve, mais recursos estarão disponíveis!
 
+
 # Instalação:
 
 ```shell
