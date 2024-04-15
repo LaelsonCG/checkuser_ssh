@@ -32,7 +32,7 @@ echo "***********************************************"
 echo "Parabéns! CheckUser Instalado com Sucesso."
 echo "***********************************************"
 echo ""
-echo "Para instruções de uso e outras informações,
+echo "Para instruções de uso e outras informações,"
 echo "visite a documentação no link abaixo:"
 echo "https://github.com/LaelsonCG/checkuser_ssh"
 echo "***********************************************"
