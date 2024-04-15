@@ -2,7 +2,7 @@
 # Seja ético, se utilizar este projeto, cite a fonte.
 # OpenSource, liberado para uso não comercial ok?
 
-from flask import Flask, jsonify, Response
+from flask import Flask, jsonify, Response, request
 import subprocess
 import datetime
 import json
@@ -141,7 +141,7 @@ def listar_usuarios():
     usuarios = obter_usuarios()
     return jsonify(usuarios)
 
-# Rota para retornar as informações de um usuário específico
+# Rota para o checkuser DTunnel
 @app.route('/check/<username>', methods=['GET'])
 def buscar_usuario(username):
     usuarios = obter_usuarios()
@@ -166,6 +166,35 @@ def buscar_usuario(username):
                 usuario['count_connections'] = 0
                 return jsonify(usuario)
     return jsonify({"error": f"Usuário '{username}' não encontrado."}), 404
+
+# Rota para Checkuser Conecta4G / Conecta5G
+@app.route('/checkUser', methods=['POST'])
+def verificar_usuario():
+    try:
+        data = request.get_json()
+        if data is None or 'user' not in data:
+            return jsonify({"error": "Dados de usuário ausentes."}), 400
+
+        username = data['user']
+        expiration_date = obter_expiration_date(username)
+        count_connections = contar_conexoes_ativas(username)
+        limit_connections = obter_limite_conexoes(username)
+        expiration_days = calcular_dias_restantes(datetime.datetime.strptime(expiration_date, "%d/%m/%Y").date())
+
+        new_usuario = {
+            "username": username,
+            "count_connection": count_connections,
+            "limiter_user": limit_connections,
+            "expiration_date": expiration_date,
+            "expiration_days": expiration_days,
+            "time_online": obter_tempo_conectado(username),
+            "uuid": None  # Adicione o valor correto aqui
+        }
+
+        return Response(json.dumps(new_usuario), mimetype='application/json')
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=7000)
