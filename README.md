@@ -25,4 +25,3 @@ Após ativar, você poderá usar a api em aplicativos baseados no conecta4g e dt
 
 ### Conecta4G/5G
 ```http://dominio_ou_ip:7000/checkUser```
-
