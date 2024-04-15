@@ -36,3 +36,4 @@ echo "Para instruções de uso e outras informações,"
 echo "visite a documentação no link abaixo:"
 echo "https://github.com/LaelsonCG/checkuser_ssh"
 echo "***********************************************"
+rm /root/instalar.sh
