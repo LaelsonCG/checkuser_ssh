@@ -20,10 +20,10 @@ wget https://raw.githubusercontent.com/LaelsonCG/checkuser_ssh/main/instalar.sh 
 ## Documentação
 Após ativar, você poderá usar a api em aplicativos baseados no conecta4g e dtunnel, utilizando a porta 7000, como nos exemplos abaixo:
 
-<b>Dtunnel</b>
+<b>Dtunnel:</b><br>
 http://dominio_ou_ip:7000
 
-<b>Conecta4G/5G</b>
+<b>Conecta4G:</b><br>
 http://dominio_ou_ip:7000/checkUser
 
 ### Iniciando o CheckUser:
