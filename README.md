@@ -12,11 +12,11 @@ Em breve, mais recursos estarão disponíveis!
 
 
 ## Instalação:
-<b>Instalando</b>
+<b>Para Instalar</b>
 ```shell
 wget https://raw.githubusercontent.com/LaelsonCG/checkuser_ssh/main/instalar.sh && chmod +x instalar.sh && ./instalar.sh
 ```
-<b>Para desinstalar</b>
+<b>Para Desinstalar</b>
 ```shell
 wget https://raw.githubusercontent.com/LaelsonCG/checkuser_ssh/main/instalar.sh && chmod +x desinstalar.sh && ./desinstalar.sh
 ```
