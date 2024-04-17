@@ -18,7 +18,7 @@ wget https://raw.githubusercontent.com/LaelsonCG/checkuser_ssh/main/instalar.sh 
 ```
 <b>Para Desinstalar</b>
 ```shell
-wget https://raw.githubusercontent.com/LaelsonCG/checkuser_ssh/main/instalar.sh && chmod +x desinstalar.sh && ./desinstalar.sh
+wget https://raw.githubusercontent.com/LaelsonCG/checkuser_ssh/main/desinstalar.sh && chmod +x desinstalar.sh && ./desinstalar.sh
 ```
 
 ## Documentação
