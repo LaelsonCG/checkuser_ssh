@@ -209,13 +209,15 @@ class SSHLimiterOptimized:
             for idx, pid_str in enumerate(pids, 1):
                 try:
                     pid = int(pid_str)
+                    if not os.path.exists(f"/proc/{pid}"):
+                        continue
                     # Usar SIGTERM (gracioso) nas sessões mais recentes primeiro
                     os.kill(pid, signal.SIGTERM)
                     print(f"  ✓ Desconectando sessão {idx}/{conexoes_excedentes}: PID {pid}")
                     time.sleep(0.2)
                 
                 except (ValueError, ProcessLookupError):
-                    print(f"  ⚠ PID {pid_str} não encontrado")
+                    continue
                 except PermissionError:
                     # Se não temos permissão para SIGTERM, tentar SIGKILL
                     try:
@@ -273,11 +275,6 @@ def verificar_limites_otimizado():
         except Exception as e:
             print(f"❌ Erro na verificação de limites: {e}")
             time.sleep(1)
-
-# Iniciar thread de verificação
-thread = threading.Thread(target=verificar_limites_otimizado, daemon=True)
-thread.start()
-
 
 # ============ ROTAS DA API ============
 
@@ -392,7 +389,9 @@ def _obter_tempo_conectado(username):
 
 
 if __name__ == '__main__':
+    thread = threading.Thread(target=verificar_limites_otimizado, daemon=True)
+    thread.start()
     print("🚀 SSH Connection Limiter iniciado...")
     print("📊 Cache duration: 30s")
     print("⏱️  Verificação: a cada 3s")
-    app.run(debug=True, host='0.0.0.0', port=7000)
+    app.run(debug=True, host='0.0.0.0', port=7000, use_reloader=False)
