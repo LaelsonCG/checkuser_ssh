@@ -1,7 +1,3 @@
-# Projeto checkuser e Limitador SSH criado por @Laael
-# Seja ético, se utilizar este projeto, cite a fonte.
-# OpenSource, liberado para uso não comercial ok?
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -81,38 +77,107 @@ class SSHLimiterOptimized:
         return usuarios_limites
     
     def obter_conexoes_ssh_rapido(self):
-        """Obter conexões SSH via processos sshd (MÉTODO MAIS PRECISO)"""
+        """Obter conexões SSH reais via leitura de /proc"""
         conexoes = defaultdict(int)
         
         try:
-            # Detectar processos sshd por usuário (apenas sessões não-priv)
-            # Filtra apenas "sshd: usuario@pts" (sessão real), ignora "sshd: usuario [priv]"
-            resultado = subprocess.run(
-                "ps aux | grep 'sshd:' | grep -v 'priv' | grep -v grep | awk '{print $1}' | grep -v '^root$' | grep -v '^sshd$' | sort | uniq -c",
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            
-            if resultado.stdout.strip():
-                for linha in resultado.stdout.strip().split('\n'):
-                    if linha.strip():
-                        partes = linha.strip().split()
-                        if len(partes) >= 2:
-                            try:
-                                count = int(partes[0])
-                                usuario = partes[1]
-                                conexoes[usuario] = count
-                            except (ValueError, IndexError):
-                                continue
+            for sessao in self._listar_sessoes_ssh_processo():
+                conexoes[sessao["usuario"]] += 1
         
-        except subprocess.TimeoutExpired:
-            print("⚠ Timeout ao verificar conexões SSH")
         except Exception as e:
             print(f"Erro ao obter conexões SSH: {e}")
         
         return dict(conexoes)
+
+    def _ler_cmdline_processo(self, pid):
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as f:
+                return f.read().replace(b"\x00", b" ").decode("utf-8", errors="replace").strip()
+        except (FileNotFoundError, ProcessLookupError, PermissionError):
+            return ""
+
+    def _uid_real_processo(self, pid):
+        try:
+            with open(f"/proc/{pid}/status", "r", encoding="utf-8", errors="replace") as f:
+                for linha in f:
+                    if linha.startswith("Uid:"):
+                        partes = linha.split()
+                        if len(partes) >= 2:
+                            return int(partes[1])
+                        break
+        except (FileNotFoundError, ProcessLookupError, PermissionError, ValueError):
+            return None
+        return None
+
+    def _inicio_processo(self, pid):
+        try:
+            with open(f"/proc/{pid}/stat", "r", encoding="utf-8", errors="replace") as f:
+                conteudo = f.read()
+            fim_comm = conteudo.rfind(")")
+            if fim_comm == -1:
+                return None
+            campos = conteudo[fim_comm + 2:].split()
+            if len(campos) < 20:
+                return None
+            return int(campos[19])
+        except (FileNotFoundError, ProcessLookupError, PermissionError, ValueError):
+            return None
+
+    def _extrair_usuario_sshd(self, cmdline):
+        match = re.match(r"^sshd:\s+([^\s@]+)(?:@|\s|$)", cmdline)
+        if not match:
+            return None
+        usuario = match.group(1)
+        if "[priv]" in cmdline:
+            return None
+        return usuario
+
+    def _listar_sessoes_ssh_processo(self):
+        """Listar sessões sshd reais do sistema, excluindo processos [priv] e auxiliares."""
+        sessoes = []
+        uids_usuario = {}
+        try:
+            for entrada in os.scandir("/proc"):
+                if not entrada.name.isdigit():
+                    continue
+
+                pid = int(entrada.name)
+                cmdline = self._ler_cmdline_processo(pid)
+                if not cmdline.startswith("sshd: "):
+                    continue
+
+                usuario = self._extrair_usuario_sshd(cmdline)
+                if not usuario:
+                    continue
+
+                uid_processo = self._uid_real_processo(pid)
+                if usuario not in uids_usuario:
+                    uids_usuario[usuario] = self._uid_do_usuario(usuario)
+                uid_usuario = uids_usuario[usuario]
+                if uid_processo is None or uid_usuario is None or uid_processo != uid_usuario:
+                    continue
+
+                inicio = self._inicio_processo(pid)
+                if inicio is None:
+                    continue
+
+                sessoes.append({
+                    "pid": pid,
+                    "usuario": usuario,
+                    "inicio": inicio,
+                    "cmdline": cmdline,
+                })
+        except FileNotFoundError:
+            pass
+
+        return sessoes
+
+    def _uid_do_usuario(self, usuario):
+        try:
+            import pwd
+            return pwd.getpwnam(usuario).pw_uid
+        except KeyError:
+            return None
     
     def _uid_para_usuario(self, uid):
         """Converter UID para nome de usuário (com cache)"""
@@ -123,7 +188,7 @@ class SSHLimiterOptimized:
             return None
     
     def desconectar_sessoes_excedentes(self, usuario, conexoes, limite):
-        """Desconectar apenas as sessões excedentes (mantém as mais antigas)"""
+        """Desconectar apenas as sessões excedentes, priorizando as mais recentes"""
         conexoes_excedentes = conexoes - limite
         
         print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] ⚠️  "
@@ -131,38 +196,20 @@ class SSHLimiterOptimized:
               f"Desconectando {conexoes_excedentes} sessões...")
         
         try:
-            # Obter lista de PIDs SSH do usuário ordenados por tempo (mais recentes primeiro)
-            cmd = f"ps -u {usuario} -o pid=,etime= --sort=-etime | grep sshd | awk '{{print $1}}' | head -n {conexoes_excedentes}"
-            resultado = subprocess.run(
-                cmd,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            
-            pids = [p.strip() for p in resultado.stdout.strip().split('\n') if p.strip()]
+            sessoes = self._listar_sessoes_ssh_processo()
+            sessoes_usuario = [sessao for sessao in sessoes if sessao["usuario"] == usuario]
+            sessoes_usuario.sort(key=lambda item: item["inicio"], reverse=True)
+            pids = [sessao["pid"] for sessao in sessoes_usuario[:conexoes_excedentes]]
             
             if not pids:
-                # Fallback: tentar usar who para identificar processos
-                cmd_alt = f"who | grep '^{usuario}' | wc -l"
-                resultado_alt = subprocess.run(cmd_alt, shell=True, capture_output=True, text=True, timeout=5)
-                print(f"  ℹ Conexões ativas do user '{usuario}': {resultado_alt.stdout.strip()}")
-                
-                # Forçar logout das conexões mais recentes
-                subprocess.run(
-                    f"pkill -n -u {usuario} sshd 2>/dev/null || pkill -n -u {usuario} -f 'sshd:' 2>/dev/null",
-                    shell=True,
-                    timeout=5
-                )
-                print(f"  ✓ Killall enviado ao usuário '{usuario}'")
+                print(f"  ℹ Nenhuma sessão SSH elegível encontrada para '{usuario}'")
                 return
             
             # Desconectar cada PID individualmente
             for idx, pid_str in enumerate(pids, 1):
                 try:
                     pid = int(pid_str)
-                    # Usar SIGTERM (gracioso) - o usuário pode salvar dados
+                    # Usar SIGTERM (gracioso) nas sessões mais recentes primeiro
                     os.kill(pid, signal.SIGTERM)
                     print(f"  ✓ Desconectando sessão {idx}/{conexoes_excedentes}: PID {pid}")
                     time.sleep(0.2)
@@ -176,9 +223,6 @@ class SSHLimiterOptimized:
                         print(f"  ✓ SIGKILL enviado ao PID {pid_str}")
                     except:
                         pass
-        
-        except subprocess.TimeoutExpired:
-            print(f"  ⚠ Timeout ao processar desconexão de {usuario}")
         except Exception as e:
             print(f"  ❌ Erro ao desconectar {usuario}: {e}")
 
